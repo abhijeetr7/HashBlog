@@ -1,0 +1,44 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HashBlog — Simple SPA Blog</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Accessible site header / controls -->
+  <header class="site-header" role="banner">
+    <div class="brand">
+      <a href="#/" class="site-title" aria-label="Go to home">HashBlog</a>
+      <span class="tagline">A tiny, localStorage-powered blog</span>
+    </div>
+
+    <!-- Sort toggle + search live on list view but remain in DOM for accessibility -->
+    <nav class="controls" aria-label="Listing controls">
+      <div class="toggle" role="group" aria-label="Sort mode">
+        <button id="btn-latest" class="toggle-btn" data-mode="latest" aria-pressed="true">Latest</button>
+        <button id="btn-trending" class="toggle-btn" data-mode="trending" aria-pressed="false">Trending</button>
+      </div>
+      <label class="search-label" for="searchInput">Search</label>
+      <input id="searchInput" class="search" type="search" placeholder="Search title or author…" aria-describedby="searchHelp" />
+      <span id="searchHelp" class="visually-hidden">Search filters posts by title or author</span>
+    </nav>
+  </header>
+
+  <!-- Live region to announce changes like likes/comments -->
+  <div id="liveRegion" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Main app container -->
+  <main id="app" role="main">
+    <!-- List or detail view will render here -->
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <p>Made with ❤️ &nbsp;•&nbsp; No frameworks. No back-end. Just localStorage.</p>
+  </footer>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
