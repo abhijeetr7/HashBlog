@@ -8,6 +8,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HashBlog — A tiny, localStorage-powered blog</title>
+  
+  <!-- Quill Editor CSS -->
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet" />
+  
   <style>
     /* styles.css */
     /* Root variables for easy theming */
@@ -303,6 +307,36 @@
 
     /* Simple helper for icon look */
     .i{ font-style: normal; opacity:.9; }
+    
+    /* CMS specific styles */
+    .cms-form{
+      max-width: 800px;
+      margin: 0 auto;
+      display:grid;
+      gap: 16px;
+      background: linear-gradient(180deg, #0f141c, #0d1218);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+    .cms-form input, .cms-form textarea { width: 100%; }
+    .cms-form .ql-editor{
+      min-height: 250px;
+    }
+    .cms-actions{
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .btn.danger{
+      background-color: #ef4444;
+      border-color: #b91c1c;
+      color: white;
+    }
+    .btn.danger:hover{
+      background-color: #dc2626;
+      border-color: #991b1b;
+    }
   </style>
 </head>
 <body>
@@ -322,6 +356,7 @@
       <label class="search-label" for="searchInput">Search</label>
       <input id="searchInput" class="search" type="search" placeholder="Search title or author…" aria-describedby="searchHelp" />
       <span id="searchHelp" class="visually-hidden">Search filters posts by title or author</span>
+      <button id="cmsBtn" class="btn" type="button">Create Post</button>
     </nav>
   </header>
 
@@ -336,6 +371,9 @@
   <footer class="site-footer" role="contentinfo">
     <p>Made with &nbsp;❤️ &nbsp;By&nbsp; Jeet</p>
   </footer>
+
+  <!-- Quill Editor JS -->
+  <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
 
   <script>
     // app.js
@@ -386,6 +424,15 @@
       };
       const setState = (key, value) => {
         localStorage.setItem(key, JSON.stringify(value));
+      };
+      
+      const slugify = (text) => {
+        return text.toString().toLowerCase()
+          .replace(/\s+/g, '-')           // Replace spaces with -
+          .replace(/[^\w-]+/g, '')       // Remove all non-word chars
+          .replace(/--+/g, '-')         // Replace multiple - with single -
+          .replace(/^-+/, '')             // Trim - from start of text
+          .replace(/-+$/, '');            // Trim - from end of text
       };
 
       /* ---------------------------
@@ -540,6 +587,7 @@ if(!valid(name)) show("Name required");</code></pre>
       * --------------------------- */
       let currentMode = 'latest';    // 'latest' | 'trending'
       let currentSearch = '';        // search query
+      let quillEditor = null;        // Reference to the Quill editor instance
 
       const readParams = (hash) => {
         const query = hash.split('?')[1] || '';
@@ -681,6 +729,9 @@ if(!valid(name)) show("Name required");</code></pre>
 
         const userLikes = getUserLikes();
         const isLiked = !!userLikes[post.id];
+        
+        // Add a button to edit the post
+        const editLink = `#/cms?id=${encodeURIComponent(post.id)}`;
 
         // Render detail
         app.innerHTML = `
@@ -699,6 +750,7 @@ if(!valid(name)) show("Name required");</code></pre>
                 <button id="likeBtn" class="btn like-btn" type="button" aria-pressed="${isLiked}" aria-label="Toggle like">
                   ${isLiked ? '❤️ Liked' : '🤍 Like'}
                 </button>
+                <a href="${editLink}" class="btn">Edit Post</a>
               </div>
             </div>
 
@@ -817,6 +869,184 @@ if(!valid(name)) show("Name required");</code></pre>
         .replaceAll("'", '&#39;');
 
       /* ---------------------------
+      * Rendering - CMS Form
+      * --------------------------- */
+      const renderCMS = (postId) => {
+        const app = $('#app');
+        let post = { id: '', title: '', author: '', summary: '', content: '', thumbnail: '' };
+        const isEditing = !!postId;
+        let originalContent = '';
+        let formTitle = 'Create a New Post';
+        let deleteBtn = '';
+
+        if (isEditing) {
+          post = getPosts().find(p => p.id === postId);
+          if (!post) {
+            app.innerHTML = `<div class="empty">Post not found. <a href="#/cms">Create a new post?</a></div>`;
+            return;
+          }
+          formTitle = 'Edit Post';
+          originalContent = post.content;
+          deleteBtn = `<button id="deleteBtn" class="btn danger" type="button">Delete Post</button>`;
+        }
+        
+        app.innerHTML = `
+          <form id="cmsForm" class="cms-form" novalidate>
+            <h2>${formTitle}</h2>
+            <input type="hidden" id="postId" name="postId" value="${post.id}" />
+
+            <div class="field">
+              <label for="postTitle">Title</label>
+              <input type="text" id="postTitle" name="title" value="${escapeHTML(post.title)}" required />
+            </div>
+
+            <div class="field">
+              <label for="postAuthor">Author</label>
+              <input type="text" id="postAuthor" name="author" value="${escapeHTML(post.author)}" required />
+            </div>
+
+            <div class="field">
+              <label for="postSummary">Summary</label>
+              <textarea id="postSummary" name="summary" required>${escapeHTML(post.summary)}</textarea>
+            </div>
+            
+            <div class="field">
+              <label for="postThumbnail">Thumbnail URL</label>
+              <input type="text" id="postThumbnail" name="thumbnail" value="${escapeHTML(post.thumbnail)}" required />
+            </div>
+
+            <div class="field">
+              <label>Content</label>
+              <div id="editor-container"></div>
+            </div>
+
+            <div class="cms-actions">
+              <button id="cancelBtn" class="btn" type="button">Cancel</button>
+              <button id="saveBtn" class="btn primary" type="submit">Save Post</button>
+              ${deleteBtn}
+            </div>
+          </form>
+        `;
+        
+        // Initialize Quill
+        quillEditor = new Quill('#editor-container', {
+          theme: 'snow',
+          modules: {
+            toolbar: [
+              ['bold', 'italic', 'underline', 'strike'],
+              ['blockquote', 'code-block'],
+              [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+              [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+              [{ 'color': [] }, { 'background': [] }],
+              ['link', 'image'],
+              ['clean']
+            ]
+          }
+        });
+        quillEditor.root.innerHTML = originalContent;
+
+        // Form submission handler
+        $('#cmsForm')?.addEventListener('submit', (e) => {
+          e.preventDefault();
+          savePost(isEditing);
+        });
+
+        // Cancel button
+        $('#cancelBtn')?.addEventListener('click', () => {
+          navigate(writeListHash());
+        });
+
+        // Delete button
+        $('#deleteBtn')?.addEventListener('click', () => {
+          if (confirm('Are you sure you want to delete this post? This cannot be undone.')) {
+            deletePost(postId);
+          }
+        });
+      };
+      
+      const savePost = (isEditing) => {
+        const postId = $('#postId').value;
+        const title = $('#postTitle').value.trim();
+        const author = $('#postAuthor').value.trim();
+        const summary = $('#postSummary').value.trim();
+        const thumbnail = $('#postThumbnail').value.trim();
+        const content = quillEditor.root.innerHTML;
+        
+        if (!title || !author || !summary || !content || !thumbnail) {
+          announce('Please fill out all fields.');
+          return;
+        }
+        
+        const posts = getPosts();
+        
+        if (isEditing) {
+          const index = posts.findIndex(p => p.id === postId);
+          if (index !== -1) {
+            posts[index] = {
+              ...posts[index],
+              title,
+              author,
+              summary,
+              content,
+              thumbnail,
+              updatedAt: new Date().toISOString()
+            };
+            setPosts(posts);
+            announce('Post updated successfully!');
+          }
+        } else {
+          // New post
+          const newId = slugify(title);
+          const now = new Date().toISOString();
+          const newPost = {
+            id: newId,
+            title,
+            author,
+            summary,
+            content,
+            thumbnail,
+            createdAt: now,
+            updatedAt: now,
+            views: 0,
+            likes: 0
+          };
+          // Add to the beginning of the array
+          posts.unshift(newPost);
+          setPosts(posts);
+          announce('New post created successfully!');
+        }
+        
+        navigate(writeListHash());
+      };
+      
+      const deletePost = (postId) => {
+        let posts = getPosts();
+        const postIndex = posts.findIndex(p => p.id === postId);
+        if (postIndex === -1) {
+          announce('Error: Post not found.');
+          navigate(writeListHash());
+          return;
+        }
+
+        // Remove the post
+        posts.splice(postIndex, 1);
+        setPosts(posts);
+
+        // Remove related comments
+        const comments = getCommentsMap();
+        delete comments[postId];
+        setCommentsMap(comments);
+
+        // Remove related likes
+        const userLikes = getUserLikes();
+        delete userLikes[postId];
+        setUserLikes(userLikes);
+
+        announce('Post deleted successfully.');
+        navigate(writeListHash());
+      };
+
+      /* ---------------------------
       * Router
       * --------------------------- */
       const parseHash = () => {
@@ -854,6 +1084,8 @@ if(!valid(name)) show("Name required");</code></pre>
           renderList();
         } else if (segments[0] === 'post' && segments[1]) {
           renderDetail(decodeURIComponent(segments[1]), Object.fromEntries(params.entries()));
+        } else if (segments[0] === 'cms') {
+          renderCMS(params.get('id'));
         } else {
           // Fallback
           navigate(writeListHash());
@@ -887,6 +1119,18 @@ if(!valid(name)) show("Name required");</code></pre>
             if (segments.length === 0 || segments[0] === '' || segments[0] === '/') {
               renderList();
             }
+          }
+        });
+        $('#cmsBtn')?.addEventListener('click', () => {
+          navigate('#/cms');
+        });
+        
+        // Keyboard shortcut for CMS form
+        document.addEventListener('keydown', (e) => {
+          // Check for Ctrl+N on Windows/Linux or Cmd+N on Mac
+          if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+            e.preventDefault();
+            navigate('#/cms');
           }
         });
       };
